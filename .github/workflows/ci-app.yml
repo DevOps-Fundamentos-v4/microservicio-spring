@@ -1,24 +1,16 @@
 name: CI App Gradle
 on:
-  # Trigger analysis when pushing in master or pull requests, and when creating
-  # a pull request.
-  push:
-    branches:
-      - feature-ms-joaquinMorales-mensaje
-  pull_request:
-      types: [opened, synchronize, reopened]
-name: gradle
+  [workflow_dispatch, push]
+concurrency: ci-app-${{ github.ref }}
 jobs:
-  sonarcloud:
+  gitleaks:
+    name: gitleaks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-      with:
-        # Disabling shallow clone is recommended for improving relevancy of reporting
-        fetch-depth: 0
-    - name: SonarCloud Scan
-      uses: sonarsource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: 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
-        SONAR_TOKEN: 2529d0a4ea1433be6244e9075b86f44612a02874
- 
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: run gitleaks docker
+        run: |
+          docker run -v ${PWD}:/path zricethezav/gitleaks:latest detect --source="/path/" -v -l debug --no-git
