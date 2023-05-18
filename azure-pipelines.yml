@@ -10,10 +10,23 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+
+- task: SonarCloudPrepare@1
+  inputs:
+    SonarCloud: 'SonarCloud'
+    organization: 'devops-fundacion-tarea-at'
+    projectKey: 'Devops-Fundacion-Tarea-AT_microservicio-spring'
+    projectName: 'microservicio-spring'
+    scannerMode: 'Other'
+  displayName: 'SonarCloud Prepare'
+- task: Gradle@3
+  inputs:
+    gradleWrapperFile: 'gradlew'
+    tasks: 'sonarqube'
+    publishJUnitResults: false
+    javaHomeOption: 'JDKVersion'
+    sonarQubeRunAnalysis: true
+    sqGradlePluginVersionChoice: 'specify'
+    sonarQubeGradlePluginVersion: '3.3'
+    spotBugsAnalysis: false
