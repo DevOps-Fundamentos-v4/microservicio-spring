@@ -2,6 +2,7 @@ plugins {
 	id 'org.springframework.boot' version '2.6.3'
 	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
 	id 'java'
+	 id 'jacoco'
 }
 
 group = 'com.example'
@@ -20,3 +21,36 @@ dependencies {
 test {
 	useJUnitPlatform()
 }
+
+test {
+    finalizedBy jacocoTestReport // report is always generated after tests run
+}
+jacocoTestReport {
+    dependsOn test // tests are required to run before generating the report
+}
+
+jacoco {
+    toolVersion = "0.8.8"
+    
+}
+
+jacocoTestReport {
+    reports {
+        html.enabled true
+		xml.enabled true
+    }
+}
+apply plugin: 'jacoco'
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.7
+            }
+        }
+    }
+}
+
+// to run coverage verification during the build (and fail when appropriate)
+check.dependsOn jacocoTestCoverageVerification

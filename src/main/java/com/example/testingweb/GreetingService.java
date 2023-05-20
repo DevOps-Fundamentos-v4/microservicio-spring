@@ -4,7 +4,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class GreetingService {
+	
 	public String greet() {
-		return "Hello, World";
+		return "Finaliza el curso DevOps Foundation v4 - Cristóbal Acevedo (alumno)";
 	}
 }

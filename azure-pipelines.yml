@@ -1,0 +1,115 @@
+jobs:
+- job: Building
+  pool:
+    vmImage: 'ubuntu-latest'
+  displayName: Build
+
+  steps:
+  - script: |
+      git fetch --unshallow
+    displayName: 'Convertir a no shallow clone para sonarcube' 
+  - task: Gradle@3
+    inputs:
+      gradleWrapperFile: 'gradlew'
+      tasks: 'build'
+      publishJUnitResults: true
+      testResultsFiles: '**/TEST-*.xml'
+      javaHomeOption: 'JDKVersion'
+      sonarQubeRunAnalysis: false
+      spotBugsAnalysis: false
+    displayName: Building,test Unitarios y cobertura de los tests
+
+    
+
+  - task: PublishCodeCoverageResults@1
+    inputs:
+        codeCoverageTool: 'JaCoCo'
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/build/reports/jacoco/test/jacocoTestReport.xml'
+        pathToSources: '$(System.DefaultWorkingDirectory)/src/main/java/'
+        reportDirectory: '$(System.DefaultWorkingDirectory)/build/reports/jacoco/test'
+        failIfCoverageEmpty: true
+    displayName: Publicacion de resultados de jacoco
+
+  - task: SonarCloudPrepare@1
+    inputs:
+      SonarCloud: 'SONAR-CLOUD'
+      organization: 'devops-fundamental-v4'
+      projectKey: Devops-fundamental-v4_microservicio-spring-1
+      projectName: microservicio-spring-1
+    displayName: 'Conexion a sonar Cloud Api'
+  - task: Gradle@3
+    inputs:
+      gradleWrapperFile: 'gradlew'
+      tasks: 'sonarqube'
+      publishJUnitResults: true
+      testResultsFiles: 'TEST-*.xml'
+      javaHomeOption: 'JDKVersion'
+      sonarQubeRunAnalysis: true
+      sqGradlePluginVersionChoice: 'specify'
+      sonarQubeGradlePluginVersion: '3.5.0.2730'
+      spotBugsAnalysis: false
+    displayName: 'Análisis con sonar del commit'
+
+  - task: sonarcloud-buildbreaker@2
+    inputs:
+      SonarCloud: 'SONAR-CLOUD'
+      organization: 'devops-fundamental-v4'
+    displayName: 'Verificación con el quality gate y su config'
+  - task: Docker@2
+    inputs:
+      containerRegistry: 'docker-service'
+      command: 'login'
+    displayName: 'Login a la cuenta de docker'
+  - task: Docker@2
+    inputs:
+      containerRegistry: 'docker-service'
+      repository: 'crisacevedo/microservicio-spring'
+      command: 'build'
+      Dockerfile: '**/Dockerfile' 
+    displayName: 'Build utilizando el DockerFile del jar hacia la imagen para el registry de Docker'
+
+  
+  - task: Docker@2
+    inputs:
+      containerRegistry: 'docker-service'
+      repository: 'crisacevedo/microservicio-spring'
+      command: 'push'
+    displayName: '´Push de la imagen al repository de docker crisacevedo/microservicio-spring'
+
+- job: DeployLoadTesting
+  
+  dependsOn: Building
+  pool:
+    'default'
+  steps:
+  
+  - task: Kubernetes@1
+    inputs:
+      connectionType: 'None'
+      command: 'create'
+      arguments: 'deployment microservice --image=crisacevedo/microservicio-spring:117'
+      secretType: 'dockerRegistry'
+      containerRegistryType: 'Azure Container Registry'
+    displayName: 'deploy de la imagen ' 
+  - task: PowerShell@2
+    inputs:
+     targetType: 'inline'
+     script: 'Start-Job -ScriptBlock {kubectl port-forward deployment/microservice 8085:8080};C:\apache\bin\ApacheJMeter.jar -n -t C:\apache\bin\Devops-Tarea.jmx -l C:\apache\bin\nuevo.jtl'
+    displayName: 'Port forward para el deployment de la imagen para disponibizarla para el load testing.' 
+         
+- job: JmeterCleaning
+  dependsOn: DeployLoadTesting
+  condition:  
+  pool:
+    'default'
+  steps:
+   -  task: PowerShell@2
+      inputs:
+       targetType: 'inline'
+       script: ' Get-Content  C:\apache\bin\nuevo.jtl'
+      displayName: 'Se muestra por shell el detalle de la prueba corrida' 
+   -  task: PowerShell@2
+      inputs:
+       targetType: 'inline'
+       script: 'kubectl delete deploy microservice'
+      displayName: 'Se elimina deploy de kubectl cluster local' 
