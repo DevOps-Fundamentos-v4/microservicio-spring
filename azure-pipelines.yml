@@ -1,0 +1,117 @@
+# Gradle
+# Build your Java project and run tests with Gradle using a Gradle wrapper script.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger:
+- feature-ms-EnriqueMoraga-mensaje
+
+jobs:
+- job: job1
+  pool:
+    vmImage: ubuntu-latest
+
+  steps:
+    - script: |
+        git fetch --unshallow
+      displayName: 'convert to non-shallow clone' 
+
+    - task: Gradle@3
+      inputs:
+        gradleWrapperFile: 'gradlew'
+ #       tasks: 'build jacocoTestReport'
+        tasks: 'build jacocoTestReport jacocoTestCoverageVerification'
+        publishJUnitResults: true
+        testResultsFiles: '**/TEST-*.xml'
+        javaHomeOption: 'JDKVersion'
+        sonarQubeRunAnalysis: false
+        spotBugsAnalysis: false
+      displayName: Build
+
+    - task: PublishCodeCoverageResults@1
+      inputs:
+        codeCoverageTool: 'JaCoCo'
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/build/reports/jacoco/test/jacocoTestReport.xml'
+        pathToSources: '$(System.DefaultWorkingDirectory)/src/main/java/'
+        reportDirectory: '$(System.DefaultWorkingDirectory)/build/reports/jacoco/test'
+        failIfCoverageEmpty: true
+      displayName: 'JaCoCo Pruebas Unitarias'
+
+    - task: SonarCloudPrepare@1
+      inputs:
+        SonarCloud: 'Conexion'
+        organization: 'devopsfundv4emc-microservicio-spring'
+        projectName: 'microservicio-spring'
+        projectKey: 'DevOpsFundV4EMC_microservicio-spring'
+        extraProperties: |
+          sonar.pullrequest.provider=none
+          sonar.scm.disabled=true
+          sonar.coverage.jacoco.xmlReportPaths=$(System.DefaultWorkingDirectory)/build/jacocoHtml/test/jacocoTestReport.xml
+          sonar.coverage.jacoco.minimumProjectThreshol="$(min_coverage)"  
+          sonar.qualitygate.wait=true
+          sonar.qualitygate.conditions=blocker
+          sonar.issue.squid:MaximumInheritanceDepth.severity=BLOCKER
+      displayName: 'SonarCloud Prepare'
+    - task: Gradle@3
+      inputs:
+        gradleWrapperFile: 'gradlew'
+        tasks: 'sonarqube'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        sonarQubeRunAnalysis: true
+        sqGradlePluginVersionChoice: 'specify'
+        sonarQubeGradlePluginVersion: '3.5.0.2730'
+        spotBugsAnalysis: false
+      displayName: Ejecucion Sonar
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'Docker'
+        command: 'login'
+      displayName: Login Docker
+    
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'Docker'
+        repository: 'enriquemoraaga/microservicio-spring'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: |
+                $(Build.BuildId)
+                latest
+      displayName: Build Ambiente
+
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'Docker'
+        repository: 'enriquemoraaga/microservicio-spring'
+        command: 'push'
+        tags: |
+              $(Build.BuildId)
+              latest
+      displayName: Build Imagen Docker
+
+- job: job2
+  dependsOn: job1
+  pool: 'Default'
+  steps:
+  - task: Kubernetes@1
+    inputs:
+        connectionType: 'None'
+        command: 'apply'
+        arguments: '--force -f deployment-app.yaml'
+    displayName: 'kubectl Connect'
+
+  - task: PowerShell@2
+    inputs:
+        targetType: 'inline'
+        script: |
+          Start-Process "kubectl" -ArgumentList "port-forward service/lab-service 8080:8080" -WindowStyle Hidden
+    displayName: 'kubectl port-forward'
+    continueOnError: true
+
+  - task: CmdLine@2
+    inputs:
+        script: |
+            jmeter -n -t test-plan.jmx -l resultados.jtl
+    displayName: 'Run JMeter'
