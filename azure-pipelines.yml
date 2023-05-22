@@ -1,0 +1,62 @@
+
+trigger:
+- feature-ms-FranciscoPeña-mensaje
+jobs:
+- job: Job1
+  displayName: 'Job Cloud'
+  pool:
+    vmImage: ubuntu-latest
+
+  steps:
+  - task: Gradle@3
+    inputs:
+      gradleWrapperFile: 'gradlew'
+      tasks: 'build'
+      publishJUnitResults: true
+      testResultsFiles: '**/TEST-*.xml'
+      javaHomeOption: 'JDKVersion'
+      sonarQubeRunAnalysis: false
+      spotBugsAnalysis: false
+      
+  - task: SonarCloudPrepare@1
+    inputs:
+      SonarCloud: 'Sonar Cloud'
+      organization: 'ravelly'
+      projectKey: 'ravelly_Proyecto-Final-v2'
+      projectName: 'Proyecto Final v2'
+
+  - task: Gradle@3
+    inputs:
+      gradleWrapperFile: 'gradlew'
+      tasks: 'sonarqube'
+      publishJUnitResults: false
+      javaHomeOption: 'JDKVersion'
+      sonarQubeRunAnalysis: true
+      sqGradlePluginVersionChoice: 'specify'
+      sonarQubeGradlePluginVersion: '3.5.0.2730'
+      spotBugsAnalysis: false
+  - task: JMeterInstaller@0
+    inputs:
+        jmeterVersion: '5.4.2'
+
+  - task: Docker@2
+    inputs:
+        containerRegistry: 'Docker'
+        command: 'login'
+
+  - task: Docker@2
+    inputs:
+        containerRegistry: 'Docker'
+        repository: 'ravelly/devops'
+
+- job: Job2
+  dependsOn: Job1
+  displayName: 'Job Local'
+  pool:
+    name: Default
+  steps:
+  - task: Kubernetes@1
+    inputs:
+      connectionType: 'None'
+      command: 'apply'
+      arguments: '--force -f deployment-app.yaml'
