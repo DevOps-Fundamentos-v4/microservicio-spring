@@ -14,3 +14,4 @@ pipeline {
   sh "./gradlew clean test"
   }
 }
+
