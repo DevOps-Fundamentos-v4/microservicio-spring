@@ -1,4 +1,9 @@
-node {
+pipeline {
+  stage ('Checkout') {
+      steps {
+          checkout scm
+      }
+  }
   stage('Build'){
     checkout scm
     sh "chmod 777 gradlew"
@@ -9,3 +14,4 @@ node {
   sh "./gradlew clean test"
   }
 }
+
